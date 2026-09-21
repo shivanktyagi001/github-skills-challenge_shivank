@@ -40,7 +40,9 @@ The detector thresholds are response time above 500 ms, CPU above 80%, and memor
 
 No expected anomaly was missed and no normal record was incorrectly flagged in this dataset. The returned event includes the timestamp, service, anomaly type, reasons, and complete source record, so the result explains why it was flagged.
 
-One limitation is that the thresholds are fixed and do not learn the service's baseline or account for seasonal traffic. A future improvement would be a configurable or adaptive baseline with tests for boundary values and changing traffic patterns.
+## Known limitation and possible improvement
+
+The detector uses fixed thresholds and does not learn the service's baseline or account for seasonal traffic. A future improvement would be a configurable or adaptive baseline with tests for boundary values and changing traffic patterns.
 
 ## Event-flow investigation and corrections
 
