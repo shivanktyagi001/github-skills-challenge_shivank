@@ -70,3 +70,17 @@ def test_consumer_receives_event():
     messages = consumer.consume()
 
     assert len(messages) == 1
+
+
+def test_pipeline_delivers_detected_anomalies_to_consumer():
+    data_file = Path(__file__).parent.parent / "data" / "service_data.json"
+
+    result = run_pipeline(data_file)
+
+    assert result["records_processed"] == 10
+    assert len(result["anomalies_detected"]) == 2
+    assert len(result["events_consumed"]) == 2
+    assert [event["timestamp"] for event in result["events_consumed"]] == [
+        "2026-09-20T10:05:00",
+        "2026-09-20T10:06:00",
+    ]

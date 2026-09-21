@@ -1,18 +1,82 @@
-# GitHub Challenge
+# AIOps Monitoring and Event Processing
 
-<img src="https://octodex.github.com/images/Professortocat_v2.png" align="right" height="200px" />
+## Scenario
 
-Hey there!
+This project monitors a synthetic `payment-service`. The operational problem is a short period of slow payment responses and resource pressure that also produces error logs. The AIOps workflow detects those signals, turns them into anomaly events, and moves them through a lightweight in-memory event pipeline for downstream processing.
 
-Your challenge is ready.
-Follow the instructions provided for this challenge and complete the required tasks in this repository.
+The assessment uses Python components rather than a live Kafka or Airflow deployment:
 
-Make sure your work is committed and pushed to your repository before submission.
+`service_data.json` -> `AnomalyDetector` -> `EventProducer` -> `EventTopic` -> `EventConsumer` -> AIOps output
 
-Good luck!
+## Repository components
 
+- `data/service_data.json`: ten timestamped service observations containing metrics and log fields.
+- `src/anomaly_detector.py`: applies threshold and log-level rules and returns an anomaly event with reasons and the original record.
+- `src/event_producer.py`: publishes an event to an `EventTopic`.
+- `src/event_topic.py`: provides the in-memory topic and message storage.
+- `src/event_consumer.py`: reads published events from the topic.
+- `src/aiops_pipeline.py`: loads the data, detects anomalies, publishes them, consumes them, and prints the final result.
+- `tests/`: unit tests plus an end-to-end pipeline test.
 
----
+## Operational data analysis
 
-&copy; 2025 GitHub &bull; [Code of Conduct](https://www.contributor-covenant.org/version/2/1/code_of_conduct/code_of_conduct.md) &bull; [MIT License](https://gh.io/mit)
+Each record belongs to `payment-service` and has an ISO-like timestamp at one-minute intervals. The metric fields are `response_time_ms`, `cpu_percent`, and `memory_percent`. The log fields are `log_level` and `message`; `service` identifies the source and `timestamp` provides ordering and incident context.
+
+The normal observations are 10:00-10:04 and 10:07-10:09. They have response times from 120-150 ms, CPU from 42-50%, memory from 51-57%, `INFO` level, and successful-payment messages.
+
+The unusual observations are:
+
+- `2026-09-20T10:05:00`: response time is 610 ms and the log reports `ERROR: Payment service timeout`.
+- `2026-09-20T10:06:00`: response time is 640 ms, CPU is 94%, memory is 91%, and the log reports `ERROR: Database connection timeout`.
+
+## Detection findings
+
+The detector thresholds are response time above 500 ms, CPU above 80%, and memory above 80%. An `ERROR` log also contributes a reason. The run detects exactly two anomalies:
+
+| Timestamp | Reasons |
+| --- | --- |
+| 10:05 | High response time; Error log detected |
+| 10:06 | High response time; High CPU utilization; High memory utilization; Error log detected |
+
+No expected anomaly was missed and no normal record was incorrectly flagged in this dataset. The returned event includes the timestamp, service, anomaly type, reasons, and complete source record, so the result explains why it was flagged.
+
+One limitation is that the thresholds are fixed and do not learn the service's baseline or account for seasonal traffic. A future improvement would be a configurable or adaptive baseline with tests for boundary values and changing traffic patterns.
+
+## Event-flow investigation and corrections
+
+The initial pipeline detected two events but consumed zero events. The producer wrote to a `service-events` topic while the consumer read from a separate `anomaly-events` topic. Because topics are in-memory objects, those were independent message stores. The correction was to use one `anomaly-events` instance for both producer and consumer.
+
+The detector also checked for `WARNING` logs even though the supplied concerning records use `ERROR`. The correction changed the rule to recognize `ERROR`, allowing log evidence to appear in both anomaly explanations. The existing producer, topic, and consumer architecture was retained.
+
+After correction, the final execution processed 10 records, detected 2 anomalies, and consumed 2 events. The consumer output identifies the payment-service timeout at 10:05 and the database connection timeout with resource pressure at 10:06.
+
+## Reproduce the demonstration
+
+From the repository root:
+
+```bash
+python3 -m pytest -q
+PYTHONPATH=src python3 src/aiops_pipeline.py
+```
+
+Expected validation is `9 passed`. Expected pipeline output includes:
+
+```text
+Records processed: 10
+Anomalies detected: 2
+Events consumed: 2
+```
+
+The two printed events should have timestamps `2026-09-20T10:05:00` and `2026-09-20T10:06:00`, with their detection reasons listed.
+
+## Evidence checklist
+
+Capture screenshots from the final implementation showing:
+
+1. `data/service_data.json` open with the normal and anomalous metric/log records visible.
+2. The pipeline output showing both anomaly events and their reasons.
+3. The same terminal output showing `Anomalies detected: 2` and `Events consumed: 2`, which demonstrates event generation and producer/topic/consumer delivery.
+4. The terminal showing `9 passed` from `python3 -m pytest -q`.
+
+Keep the screenshots alongside the written explanations above; screenshots do not replace the documentation.
 
