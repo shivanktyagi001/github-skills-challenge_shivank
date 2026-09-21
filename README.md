@@ -78,5 +78,5 @@ Capture screenshots from the final implementation showing:
 3. The same terminal output showing `Anomalies detected: 2` and `Events consumed: 2`, which demonstrates event generation and producer/topic/consumer delivery.
 4. The terminal showing `9 passed` from `python3 -m pytest -q`.
 
-Keep the screenshots alongside the written explanations above; screenshots do not replace the documentation.
+
 
