@@ -18,6 +18,20 @@ The assessment uses Python components rather than a live Kafka or Airflow deploy
 - `src/aiops_pipeline.py`: loads the data, detects anomalies, publishes them, consumes them, and prints the final result.
 - `tests/`: unit tests plus an end-to-end pipeline test.
 
+## Component role summary
+
+| Component | Role | Input and output |
+| --- | --- | --- |
+| Operational data | Represents payment-service telemetry. | Provides timestamped metric fields and log fields. |
+| `AnomalyDetector` | Compares each record with response-time, CPU, memory, and log-level rules. | Receives one record; returns an anomaly event with reasons and the original source record, or `None` for normal data. |
+| Event/message | Carries a detected operational issue through the workflow. | Contains the timestamp, service, type, reasons, and source record. |
+| `EventProducer` | Publishes detected anomaly events. | Receives an event and sends it to the configured topic. |
+| `EventTopic` | Simulates a streaming topic in memory. | Stores published events and makes them available to consumers. |
+| `EventConsumer` | Receives events from the topic. | Reads the published anomaly events for downstream processing. |
+| AIOps pipeline | Orchestrates the complete workflow and presents the result. | Loads data, detects anomalies, publishes and consumes events, then prints the operational issue and its reasons. |
+
+The event flow is therefore: operational record -> detector -> event/message -> producer -> `anomaly-events` topic -> consumer -> AIOps output.
+
 ## Operational data analysis
 
 Each record belongs to `payment-service` and has an ISO-like timestamp at one-minute intervals. The metric fields are `response_time_ms`, `cpu_percent`, and `memory_percent`. The log fields are `log_level` and `message`; `service` identifies the source and `timestamp` provides ordering and incident context.
@@ -55,6 +69,13 @@ The detector also checked for `WARNING` logs even though the supplied concerning
 ### Corrections applied
 
 The producer and consumer now use the same `anomaly-events` instance. The detector recognizes `ERROR` logs and includes `Error log detected` in the event reasons. The existing producer, topic, consumer, and detector architecture was retained.
+
+### What changed
+
+- The pipeline now creates one shared `anomaly-events` topic and passes it to both the producer and consumer.
+- The detector now flags the supplied `ERROR` log records instead of looking for the wrong log level.
+- The pipeline output now reports the number of records processed, anomalies detected, events consumed, event-flow path, and the reasons for each final anomaly.
+- Tests now cover the complete detected-anomaly delivery path, including the two timestamped events from the supplied data.
 
 ### Validation result
 
