@@ -46,9 +46,19 @@ The detector uses fixed thresholds and does not learn the service's baseline or 
 
 ## Event-flow investigation and corrections
 
-The initial pipeline detected two events but consumed zero events. The producer wrote to a `service-events` topic while the consumer read from a separate `anomaly-events` topic. Because topics are in-memory objects, those were independent message stores. The correction was to use one `anomaly-events` instance for both producer and consumer.
+### Why the workflow initially failed
 
-The detector also checked for `WARNING` logs even though the supplied concerning records use `ERROR`. The correction changed the rule to recognize `ERROR`, allowing log evidence to appear in both anomaly explanations. The existing producer, topic, and consumer architecture was retained.
+The initial pipeline detected two events but consumed zero events. The producer wrote to a `service-events` topic while the consumer read from a separate `anomaly-events` topic. Because topics are in-memory objects, those were independent message stores, so the consumer had no messages to read.
+
+The detector also checked for `WARNING` logs even though the supplied concerning records use `ERROR`. This meant the log evidence was not included in the anomaly explanation.
+
+### Corrections applied
+
+The producer and consumer now use the same `anomaly-events` instance. The detector recognizes `ERROR` logs and includes `Error log detected` in the event reasons. The existing producer, topic, consumer, and detector architecture was retained.
+
+### Validation result
+
+All 9 provided tests pass. They verify normal-record filtering, anomalous-record detection, event publication, event consumption, and end-to-end delivery of both detected anomalies.
 
 After correction, the final execution processed 10 records, detected 2 anomalies, and consumed 2 events. The consumer output identifies the payment-service timeout at 10:05 and the database connection timeout with resource pressure at 10:06.
 
